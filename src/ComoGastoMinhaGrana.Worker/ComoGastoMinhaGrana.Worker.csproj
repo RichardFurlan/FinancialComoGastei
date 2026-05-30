@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-ComoGastoMinhaGrana.Worker-ae336452-5c0f-4bbb-8876-5baec95d4116</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.3.6" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ComoGastoMinhaGrana.Application\ComoGastoMinhaGrana.Application.csproj" />
+    <ProjectReference Include="..\ComoGastoMinhaGrana.Infrastructure\ComoGastoMinhaGrana.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
