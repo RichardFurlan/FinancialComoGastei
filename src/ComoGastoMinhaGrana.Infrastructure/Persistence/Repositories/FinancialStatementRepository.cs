@@ -1,3 +1,4 @@
+using ComoGastoMinhaGrana.Application.Common.Dtos;
 using ComoGastoMinhaGrana.Application.Common.Interfaces;
 using ComoGastoMinhaGrana.Domain.Entities;
 using ComoGastoMinhaGrana.Infrastructure.Persistence;
@@ -28,6 +29,23 @@ public class FinancialStatementRepository : IFinancialStatementRepository
             .Include(fs => fs.Transactions).ThenInclude(t => t.Category)
             .Include(fs => fs.Analysis)
             .FirstOrDefaultAsync(fs => fs.Id == id && fs.UserId == userId);
+    }
+
+    public async Task<IEnumerable<StatementSummaryDto>> GetSummariesByUserIdAsync(Guid userId)
+    {
+        return await _context.FinancialStatements
+            .AsNoTracking()
+            .Where(fs => fs.UserId == userId)
+            .OrderByDescending(fs => fs.UploadDate)
+            .Select(fs => new StatementSummaryDto(
+                fs.Id,
+                fs.FileName,
+                fs.FileExtension,
+                fs.UploadDate,
+                fs.Status.ToString(),
+                fs.Transactions.Count(),
+                fs.Analysis != null))
+            .ToListAsync();
     }
 
     public async Task<IEnumerable<FinancialStatement>> GetByUserIdAsync(Guid userId)

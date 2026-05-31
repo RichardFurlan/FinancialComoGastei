@@ -1,5 +1,6 @@
 using ComoGastoMinhaGrana.Application.Common.Interfaces;
 using ComoGastoMinhaGrana.Domain.Entities;
+using ComoGastoMinhaGrana.Infrastructure.Consumers;
 using ComoGastoMinhaGrana.Infrastructure.Persistence;
 using ComoGastoMinhaGrana.Infrastructure.Persistence.Repositories;
 using ComoGastoMinhaGrana.Infrastructure.Services;
@@ -88,7 +89,15 @@ public static class DependencyInjection
         // --- Mensageria ---
         if (environment.IsDevelopment())
         {
-            services.AddSingleton<IMessagePublisher, NoOpMessagePublisher>();
+            // Em dev, o bus InMemory processa mensagens no mesmo processo (sem RabbitMQ)
+            services.AddMassTransit(x =>
+            {
+                x.AddConsumer<ProcessStatementConsumer>(cfg =>
+                    cfg.UseMessageRetry(r =>
+                        r.Exponential(3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(10))));
+
+                x.UsingInMemory((ctx, cfg) => cfg.ConfigureEndpoints(ctx));
+            });
         }
         else
         {
@@ -105,8 +114,8 @@ public static class DependencyInjection
                     cfg.ConfigureEndpoints(ctx);
                 });
             });
-            services.AddScoped<IMessagePublisher, MessagePublisher>();
         }
+        services.AddScoped<IMessagePublisher, MessagePublisher>();
 
         QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 

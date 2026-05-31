@@ -1,3 +1,4 @@
+using ComoGastoMinhaGrana.Application.Common.Dtos;
 using ComoGastoMinhaGrana.Application.Common.Interfaces;
 using ComoGastoMinhaGrana.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,14 @@ public class ReportRepository : IReportRepository
         _context = context;
     }
 
+    public async Task<IEnumerable<ReportSummaryDto>> GetSummariesByUserIdAsync(Guid userId)
+        => await _context.Reports
+            .AsNoTracking()
+            .Where(r => r.UserId == userId)
+            .OrderByDescending(r => r.CreatedAt)
+            .Select(r => new ReportSummaryDto(r.Id, r.Name, r.CreatedAt, r.Statements.Count()))
+            .ToListAsync();
+
     public async Task<IEnumerable<Report>> GetByUserIdAsync(Guid userId)
         => await _context.Reports
             .Include(r => r.Statements)
@@ -22,6 +31,7 @@ public class ReportRepository : IReportRepository
 
     public async Task<Report?> GetByIdWithStatementsAsync(Guid id)
         => await _context.Reports
+            .AsNoTracking()
             .Include(r => r.Statements)
                 .ThenInclude(rs => rs.Statement)
                     .ThenInclude(s => s.Transactions)

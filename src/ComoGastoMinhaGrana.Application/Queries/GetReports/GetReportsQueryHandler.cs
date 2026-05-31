@@ -15,7 +15,6 @@ public class GetReportsQueryHandler : IRequestHandler<GetReportsQuery, IEnumerab
 
     public async Task<IEnumerable<ReportSummaryDto>> Handle(GetReportsQuery request, CancellationToken cancellationToken)
     {
-        var reports = await _repository.GetByUserIdAsync(request.UserId);
-        return reports.Select(r => new ReportSummaryDto(r.Id, r.Name, r.CreatedAt, r.Statements.Count));
+        return await _repository.GetSummariesByUserIdAsync(request.UserId);
     }
 }

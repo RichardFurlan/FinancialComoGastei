@@ -8,7 +8,7 @@ using ComoGastoMinhaGrana.Infrastructure.Services;
 using MassTransit;
 using Microsoft.Extensions.Logging;
 
-namespace ComoGastoMinhaGrana.Worker.Consumers;
+namespace ComoGastoMinhaGrana.Infrastructure.Consumers;
 
 public class ProcessStatementConsumer : IConsumer<ProcessStatementMessage>
 {
