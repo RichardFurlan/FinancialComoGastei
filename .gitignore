@@ -8,6 +8,10 @@
 .env.txt
 *.env
 
+# Documentação pessoal (referência local — não vai ao repositório público)
+SETUP.md
+PROJETO_RESUMO.md
+
 # Local dev overrides (may contain real credentials — use dotnet user-secrets instead)
 appsettings.Development.json
 appsettings*.Development.json
