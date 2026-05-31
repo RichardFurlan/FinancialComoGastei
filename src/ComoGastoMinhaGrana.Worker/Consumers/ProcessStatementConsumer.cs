@@ -3,6 +3,7 @@ using ComoGastoMinhaGrana.Application.Common.Messages;
 using ComoGastoMinhaGrana.Application.Services;
 using ComoGastoMinhaGrana.Domain.Entities;
 using ComoGastoMinhaGrana.Domain.Enums;
+using ComoGastoMinhaGrana.Infrastructure.Persistence;
 using ComoGastoMinhaGrana.Infrastructure.Services;
 using MassTransit;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,7 @@ public class ProcessStatementConsumer : IConsumer<ProcessStatementMessage>
     private readonly ICategoryRuleRepository _ruleRepository;
     private readonly IAIService _aiService;
     private readonly CategoryRuleApplierService _ruleApplier;
+    private readonly ApplicationDbContext _context;
     private readonly ILogger<ProcessStatementConsumer> _logger;
 
     public ProcessStatementConsumer(
@@ -24,6 +26,7 @@ public class ProcessStatementConsumer : IConsumer<ProcessStatementMessage>
         ICategoryRuleRepository ruleRepository,
         IAIService aiService,
         CategoryRuleApplierService ruleApplier,
+        ApplicationDbContext context,
         ILogger<ProcessStatementConsumer> logger)
     {
         _statementRepository = statementRepository;
@@ -31,6 +34,7 @@ public class ProcessStatementConsumer : IConsumer<ProcessStatementMessage>
         _ruleRepository = ruleRepository;
         _aiService = aiService;
         _ruleApplier = ruleApplier;
+        _context = context;
         _logger = logger;
     }
 
@@ -46,12 +50,21 @@ public class ProcessStatementConsumer : IConsumer<ProcessStatementMessage>
             return;
         }
 
+        // Idempotência: não reprocessar extratos já finalizados
+        if (statement.Status is StatementStatus.Processed or StatementStatus.Error)
+        {
+            _logger.LogInformation("Extrato {StatementId} já finalizado (status: {Status}), ignorando.", msg.StatementId, statement.Status);
+            return;
+        }
+
+        // Marca como Processing fora da transação para que outros workers saibam que está em andamento
         statement.Status = StatementStatus.Processing;
         await _statementRepository.UpdateAsync(statement);
 
+        await using var tx = await _context.Database.BeginTransactionAsync();
         try
         {
-            // 1. Extrair transações via DeepSeek (texto já sanitizado)
+            // 1. Extrair transações via IA (texto já sanitizado pela API)
             var structuredTransactions = await _aiService.ExtractTransactionsAsync(msg.SanitizedText);
 
             if (structuredTransactions.Count == 0)
@@ -59,6 +72,7 @@ public class ProcessStatementConsumer : IConsumer<ProcessStatementMessage>
                 statement.Status = StatementStatus.Error;
                 statement.ErrorMessage = "Nenhuma transação pôde ser extraída do arquivo.";
                 await _statementRepository.UpdateAsync(statement);
+                await tx.CommitAsync();
                 return;
             }
 
@@ -76,7 +90,7 @@ public class ProcessStatementConsumer : IConsumer<ProcessStatementMessage>
             statement.BaseCurrency = transactions.First().Currency;
             await _transactionRepository.AddRangeAsync(transactions);
 
-            // 3. Aplicar Regras de Ouro (carregadas uma única vez, aplicação em memória)
+            // 3. Aplicar Regras de Ouro
             var rules = (await _ruleRepository.GetByUserIdAsync(msg.UserId)).ToList();
             if (rules.Count > 0)
             {
@@ -88,11 +102,10 @@ public class ProcessStatementConsumer : IConsumer<ProcessStatementMessage>
                 }
             }
 
-            // 4. Montar resumo e gerar análise
+            // 4. Gerar análise financeira
             var summary = AnalysisPromptBuilder.Build(structuredTransactions);
             var analysisMarkdown = await _aiService.GenerateAnalysisAsync(summary);
 
-            // 4. Salvar análise
             var analysis = new FinancialAnalysis
             {
                 Id = Guid.NewGuid(),
@@ -101,22 +114,28 @@ public class ProcessStatementConsumer : IConsumer<ProcessStatementMessage>
                 GeneratedAt = DateTime.UtcNow
             };
 
+            // 5. Persistir análise e marcar como concluído — tudo no mesmo commit
+            await _context.FinancialAnalyses.AddAsync(analysis);
             statement.Status = StatementStatus.Processed;
             await _statementRepository.UpdateAsync(statement);
 
-            // Salvar análise diretamente no contexto (via repositório de statement já inclui o relacionamento)
-            // Usamos o DbContext via repositório não exposto — adicionamos Analysis diretamente
-            statement.Analysis = analysis;
-            await _statementRepository.UpdateAsync(statement);
-
+            await tx.CommitAsync();
             _logger.LogInformation("Extrato {StatementId} processado: {Count} transações.", msg.StatementId, transactions.Count);
         }
         catch (Exception ex)
         {
+            await tx.RollbackAsync();
             _logger.LogError(ex, "Erro ao processar extrato {StatementId}.", msg.StatementId);
-            statement.Status = StatementStatus.Error;
-            statement.ErrorMessage = "Falha inesperada ao processar o arquivo. Tente novamente.";
-            await _statementRepository.UpdateAsync(statement);
+
+            // Recarrega o statement após rollback para evitar estado obsoleto do EF Core
+            _context.ChangeTracker.Clear();
+            var failedStatement = await _statementRepository.GetByIdAsync(msg.StatementId);
+            if (failedStatement is not null)
+            {
+                failedStatement.Status = StatementStatus.Error;
+                failedStatement.ErrorMessage = "Falha inesperada ao processar o arquivo. Tente novamente.";
+                await _statementRepository.UpdateAsync(failedStatement);
+            }
         }
     }
 }

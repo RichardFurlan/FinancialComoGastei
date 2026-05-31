@@ -27,7 +27,17 @@ public class CreateCategoryCommandHandler : IRequestHandler<CreateCategoryComman
             Color = request.Color
         };
 
-        await _repository.AddAsync(category);
+        try
+        {
+            await _repository.AddAsync(category);
+        }
+        catch (Exception ex) when (
+            ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
+            ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true ||
+            ex.InnerException?.Message.Contains("23505") == true)
+        {
+            return new CreateCategoryResult(null, CreateCategoryError.DuplicateName);
+        }
 
         return new CreateCategoryResult(new CategoryDto(category.Id, category.Name, category.Color));
     }

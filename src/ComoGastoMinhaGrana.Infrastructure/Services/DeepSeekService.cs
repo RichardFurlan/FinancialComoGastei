@@ -82,7 +82,8 @@ public class DeepSeekService : IAIService
         httpRequest.Headers.Add("HTTP-Referer", "https://comogastominhagrana.app");
         httpRequest.Content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
 
-        var response = await _http.SendAsync(httpRequest);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        var response = await _http.SendAsync(httpRequest, cts.Token);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<OpenRouterResponse>();

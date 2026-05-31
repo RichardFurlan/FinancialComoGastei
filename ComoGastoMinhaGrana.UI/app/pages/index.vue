@@ -21,7 +21,7 @@ const uploading = ref(false)
 const uploadError = ref('')
 const showModal = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
-const pollingIds = ref(new Set<string>())
+const pollingIntervals = new Map<string, ReturnType<typeof setInterval>>()
 
 async function loadStatements() {
   statements.value = await apiFetch<Statement[]>('/statements')
@@ -52,22 +52,28 @@ async function handleUpload() {
 }
 
 function startPolling(id: string) {
-  if (pollingIds.value.has(id)) return
-  pollingIds.value.add(id)
+  if (pollingIntervals.has(id)) return
 
   const interval = setInterval(async () => {
     const updated = await apiFetch<Statement>(`/statements/${id}`).catch(() => null)
-    if (!updated) { clearInterval(interval); pollingIds.value.delete(id); return }
+    if (!updated) { clearInterval(interval); pollingIntervals.delete(id); return }
 
     const idx = statements.value.findIndex(s => s.id === id)
     if (idx !== -1) statements.value[idx] = updated
 
     if (updated.status !== 'Pending' && updated.status !== 'Processing') {
       clearInterval(interval)
-      pollingIds.value.delete(id)
+      pollingIntervals.delete(id)
     }
   }, 3000)
+
+  pollingIntervals.set(id, interval)
 }
+
+onUnmounted(() => {
+  pollingIntervals.forEach(clearInterval)
+  pollingIntervals.clear()
+})
 
 const statusBadge: Record<string, string> = {
   Pending: 'badge-warning',

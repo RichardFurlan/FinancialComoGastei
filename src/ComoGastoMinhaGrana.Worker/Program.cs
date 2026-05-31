@@ -10,7 +10,11 @@ builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
 builder.Services.AddMassTransit(x =>
 {
-    x.AddConsumer<ProcessStatementConsumer>();
+    x.AddConsumer<ProcessStatementConsumer>(cfg =>
+    {
+        cfg.UseMessageRetry(r =>
+            r.Exponential(3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(10)));
+    });
 
     x.UsingRabbitMq((ctx, cfg) =>
     {
