@@ -81,17 +81,15 @@ builder.Host.UseSerilog((ctx, cfg) =>
 Em `appsettings.json`: adicionar `"Seq": { "Url": "http://seq:5341" }`.
 No `docker-compose.yml`: adicionar `Seq__Url=http://seq:5341` nos serviços API e Worker.
 
-#### 2.2 Senhas hardcoded no docker-compose
-O `docker-compose.yml` usa credenciais padrão:
-- PostgreSQL: `admin / password123`
-- RabbitMQ: `guest / guest`
-
-**O que falta:** Mover para `.env` com senhas fortes:
+#### 2.2 Senhas no docker-compose
+O `docker-compose.yml` usa variáveis de ambiente para todas as credenciais. Defina os valores no `.env` antes de subir:
 ```env
+POSTGRES_USER=admin
 POSTGRES_PASSWORD=senha_forte_aqui
-RABBITMQ_PASSWORD=outra_senha_forte
+POSTGRES_DB=comogasto_db
+RABBITMQ_USER=cgmg_user
+RABBITMQ_PASS=outra_senha_forte
 ```
-E referenciar no docker-compose: `${POSTGRES_PASSWORD}`, `${RABBITMQ_PASSWORD}`.
 
 #### 2.3 Migrations não rodam automaticamente
 Não há script de inicialização. Se o banco estiver vazio, a API vai quebrar ao tentar inserir dados.
@@ -167,8 +165,11 @@ Crie `.env` na raiz do projeto (a partir de `.env.example`):
 |---|---|---|---|
 | `OPENROUTER_API_KEY` | ✅ Sim | [openrouter.ai/keys](https://openrouter.ai/keys) | — |
 | `CF_TUNNEL_TOKEN` | ✅ Para produção | Cloudflare → Zero Trust → Tunnels | — |
-| `POSTGRES_PASSWORD` | ✅ Para produção | Defina uma senha forte | `password123` (inseguro) |
-| `RABBITMQ_PASSWORD` | ✅ Para produção | Defina uma senha forte | `guest` (inseguro) |
+| `POSTGRES_USER` | Opcional | Usuário do banco | `admin` |
+| `POSTGRES_PASSWORD` | ✅ Para produção | Defina uma senha forte | — |
+| `POSTGRES_DB` | Opcional | Nome do banco | `comogasto_db` |
+| `RABBITMQ_USER` | Opcional | Usuário do RabbitMQ | `cgmg_user` |
+| `RABBITMQ_PASS` | ✅ Para produção | Defina uma senha forte | — |
 | `NUXT_PUBLIC_API_BASE` | ✅ No docker-compose | URL do Nginx ou domínio | `http://localhost:5209` |
 | `Seq__Url` | Opcional | URL do container Seq | — (logs só no console) |
 
@@ -198,13 +199,8 @@ git clone <repo-url> cgmg && cd cgmg/"Como gasto minha grana"
 ```bash
 cp .env.example .env
 nano .env
-# Preencher: OPENROUTER_API_KEY, POSTGRES_PASSWORD, RABBITMQ_PASSWORD, CF_TUNNEL_TOKEN
+# Preencher: OPENROUTER_API_KEY, POSTGRES_PASSWORD, RABBITMQ_PASS, CF_TUNNEL_TOKEN
 ```
-
-Atualizar `docker-compose.yml`:
-- Trocar `password123` por `${POSTGRES_PASSWORD}`
-- Trocar `guest` (RabbitMQ) por `${RABBITMQ_PASSWORD}`
-- Adicionar `NUXT_PUBLIC_API_BASE=http://nginx` ao serviço `ui`
 
 ### Passo 3 — Subir a stack
 

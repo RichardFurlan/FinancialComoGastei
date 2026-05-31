@@ -5,6 +5,12 @@
 
 # dotenv files
 .env
+.env.txt
+*.env
+
+# Local dev overrides (may contain real credentials — use dotnet user-secrets instead)
+appsettings.Development.json
+appsettings*.Development.json
 
 # Nuxt build artifacts
 .nuxt/
